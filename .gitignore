@@ -1,5 +1,6 @@
 temp/
 fs_root/
+libcosp.a
 *.o
 *.bin
 *.img
