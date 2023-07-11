@@ -1,6 +1,11 @@
-仿照 Haribote OS（《30天自制操作系统》）的烂作（
+仿照 Haribote OS（《30天自制操作系统》）的屑作
+使用 clang，gcc 和 nasm。
+
+作者平时没时间维护，所以请不要fork（
 
 ## 如何编译
+
+编译需要在 linux 环境下进行。
 
 1. git clone（别告诉我不会clone）
 2. 在项目根目录下新建 fs_root 和 temp 文件夹，在 temp 文件夹下分别新建 fs、graphics、hardware 和 programs 文件夹
