@@ -1,0 +1,7 @@
+temp/
+fs_root/
+*.o
+*.bin
+*.img
+.vscode/
+.VSCodeCounter/

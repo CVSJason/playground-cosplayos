@@ -1,0 +1,47 @@
+OBJECTS = \
+	temp/asminc.o temp/ascii.o temp/main.o temp/utils.o \
+	temp/graphics/palette.o temp/graphics/draw.o temp/graphics/cursor.o temp/graphics/layer.o \
+	temp/hardware/tables.o temp/hardware/interrupt.o temp/hardware/input.o temp/hardware/memory.o temp/hardware/timer.o temp/hardware/task.o\
+	temp/programs/console.o \
+	temp/fs/fs.o
+
+APPS = fs_root/hello fs_root/helloc fs_root/crack
+
+make:
+	make -f makefile cosplay.img
+
+makeclean:
+	make -f makefile cosplay.img
+	make -f makefile clean
+
+clean:
+	rm *.o *.bin
+
+cosplay.img: mbr.bin fs_root/cosplay.sys $(APPS)
+	python3 ./writefile.py ./cosplay.img ./mbr.bin ./fs_root
+
+mbr.bin: bootstrap.asm
+	nasm bootstrap.asm -o mbr.bin
+
+fs_root/cosplay.sys: osentry.asm kernel.bin
+	nasm osentry.asm -o osentry.bin
+	cat osentry.bin kernel.bin >fs_root/cosplay.sys
+
+fs_root/%: apps/%/makefile
+	make -f makefile -C apps/$*/
+	cat apps/$*/$* >fs_root/$*
+
+kernel.bin: $(OBJECTS)
+	ld -T kernel/kernel.ld -o kernel.bin $(OBJECTS) -L./golibc -lgolibc
+
+temp/asminc.o: asminc.asm
+	nasm asminc.asm -f elf32 -o temp/asminc.o
+
+temp/ascii.o: ascii.asm
+	nasm ascii.asm -f elf32 -o temp/ascii.o
+
+ascii.asm: ascii.png
+	python3 writefont.py ascii.png
+
+temp/%.o: kernel/%.cpp 
+	clang++ kernel/$*.cpp -o temp/$*.o -target x86_64-pc-none-gnu -m32 -std=c++17 -c -I./golibc 
