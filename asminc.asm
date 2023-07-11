@@ -12,7 +12,7 @@
     global  jumpFar, callFar
     global  asm_inthandler0c, asm_inthandler0d, asm_inthandler20, asm_inthandler21, asm_inthandler2c
     global  asm_consoleApi
-    global  startApp
+    global  startApp, endApp
 
 section .text
 
@@ -148,17 +148,13 @@ asm_inthandler0d:
     mov     es, ax
     call    inthandler0d
     cmp     eax, 0
-    jne     .end_app
+    jne     endApp
     pop     eax
     popad
     pop     ds
     pop     es
     add     esp, 4
     iretd
-.end_app:
-    mov     esp, [eax]
-    popad
-    ret
 
 asm_inthandler21:
     push    es
@@ -219,16 +215,12 @@ asm_consoleApi:
     mov     es, ax
     call    _consoleApi
     cmp     eax, 0
-    jne     .end_app
+    jne     endApp
     add     esp, 32
     popad
     pop     es
     pop     ds
     iretd
-.end_app:
-    mov     esp, [eax]
-    popad
-    ret
 
 startApp:
     pushad
@@ -250,3 +242,9 @@ startApp:
     push    ecx
     push    eax
     retf
+
+endApp:
+    mov     esp, [eax]
+    mov     dword [eax + 4], 0
+    popad
+    ret

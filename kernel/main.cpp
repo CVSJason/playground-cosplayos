@@ -122,6 +122,10 @@ extern "C" int main() {
     var nextCursorX = 8;
     var consoleIsActive = true;
     var lastKeyboardOut = -1;
+    var e0flag = false;
+    
+    var commandL = false, commandR = false;
+    var controlL = false, controlR = false;
 
     forever {
         io_cli();
@@ -135,37 +139,77 @@ extern "C" int main() {
             let data = dataRaw & 0x00ffffff;
 
             if (type == IOQUEUE_KEYBOARD_IN) {
-                if (data == 0x0f) { // Tab
-                    consoleIsActive = !consoleIsActive;
+                if (data == 0xe0 && !e0flag) {
+                    e0flag = true;
+                } else {
+                    
 
-                    if (consoleIsActive) {
-                        drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, true);
+                    if (data == 0x0f) { // Tab
+                        consoleIsActive = !consoleIsActive;
+
+                        if (consoleIsActive) {
+                            drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, true);
+                        } else {
+                            drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, false);
+                        }
+
+                        consoleTask->queue->push(consoleIsActive ? 1 : 0, IOQUEUE_CONTROL_IN);
+                        
+                        layerController->refresh(windowLayer->x, windowLayer->y, windowLayer->width, 24);
+
+                        continue;
+                    } else if (data == 0x3a) { // caps
+                        bootInfo->leds ^= 4;
+                        ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
+                        ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
+                    } else if (data == 0x45) { // num
+                        bootInfo->leds ^= 2;
+                        ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
+                        ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
+                    } else if (data == 0x46) { // scroll
+                        bootInfo->leds ^= 1;
+                        ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
+                        ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
+                    } else if (data == 0xfa) {
+                        lastKeyboardOut = -1;
+                    } else if (data == 0xfe) {
+                        waitKbcSendReady();
+                        io_out8(PORT_KEYDATA, lastKeyboardOut);
+                    } else if (data == 0x5b && e0flag) {
+                        commandL = true;
+                    } else if (data == 0xdb && e0flag) {
+                        commandL = false;
+                    } else if (data == 0x5c && e0flag) {
+                        commandR = true;
+                    } else if (data == 0xdc && e0flag) {
+                        commandR = false;
+                    } else if (data == 0x1d) {
+                        if (e0flag) controlL = true; else controlR = true;
+                    } else if (data == 0x9d) {
+                        if (e0flag) controlL = false; else controlR = false;
                     } else {
-                        drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, false);
+                        if ((controlL || controlR) && data == 0x2e) {
+                            if (consoleTask->tss.ss0 != 0) {
+                                let console = *(ConsoleData **)0x0fec;
+
+                                void _consolePutString(ConsoleData *consoleData, const char *str);
+
+                                _consolePutString(console, "^C\n");
+
+                                io_cli();
+
+                                consoleTask->tss.eax = (int) &(consoleTask->tss.esp0);
+                                consoleTask->tss.eip = (int) endApp;
+                                
+                                io_sti();
+                            }
+
+                            e0flag = false;
+                            continue;
+                        }
                     }
 
-                    consoleTask->queue->push(consoleIsActive ? 1 : 0, IOQUEUE_CONTROL_IN);
-                    
-                    layerController->refresh(windowLayer->x, windowLayer->y, windowLayer->width, 24);
-
-                    continue;
-                } else if (data == 0x3a) { // caps
-                    bootInfo->leds ^= 4;
-                    ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
-                    ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
-                } else if (data == 0x45) { // num
-                    bootInfo->leds ^= 2;
-                    ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
-                    ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
-                } else if (data == 0x46) { // scroll
-                    bootInfo->leds ^= 1;
-                    ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
-                    ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
-                } else if (data == 0xfa) {
-                    lastKeyboardOut = -1;
-                } else if (data == 0xfe) {
-                    waitKbcSendReady();
-                    io_out8(PORT_KEYDATA, lastKeyboardOut);
+                    e0flag = false;
                 }
 
                 if (consoleIsActive) {

@@ -20,3 +20,4 @@ extern "C" void load_tr(int tr);
 extern "C" void jumpFar(int eip, int cs);
 extern "C" void callFar(int eip, int cs);
 extern "C" void startApp(int eip, int cs, int esp, int ds, int *tssEsp0);
+extern "C" void endApp();

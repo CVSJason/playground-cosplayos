@@ -1,7 +1,7 @@
-extern "C" void apiPutCharUtf32(int chara);
+extern "C" void apiPutString(const char *str);
 
 int main() {
-    apiPutCharUtf32('H');
+    apiPutString("Hello, world!");
 
     return 0;
 }
