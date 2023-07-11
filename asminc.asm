@@ -1,6 +1,6 @@
     bits 32
 
-    extern  inthandler0d, inthandler21, inthandler2c, inthandler20, _consoleApi
+    extern  inthandler0c, inthandler0d, inthandler20, inthandler21, inthandler2c, _consoleApi
 
     global  io_hlt, io_cli, io_sti, io_stihlt
     global  io_in8, io_in16, io_in32
@@ -10,7 +10,7 @@
     global  load_cr0, store_cr0
     global  load_tr
     global  jumpFar, callFar
-    global  asm_inthandler0d, asm_inthandler21, asm_inthandler2c, asm_inthandler20
+    global  asm_inthandler0c, asm_inthandler0d, asm_inthandler20, asm_inthandler21, asm_inthandler2c
     global  asm_consoleApi
     global  startApp
 
@@ -110,6 +110,31 @@ jumpFar:
 callFar:
     call    far [esp + 4]
     ret
+
+asm_inthandler0c:
+    sti
+    push    es
+    push    ds
+    pushad
+    mov     eax, esp
+    push    eax
+    mov     ax, ss
+    mov     ds, ax
+    mov     es, ax
+    call    inthandler0c
+    cmp     eax, 0
+    jne     .end_app
+    pop     eax
+    popad
+    pop     ds
+    pop     es
+    add     esp, 4
+    iretd
+.end_app:
+    mov     esp, [eax]
+    popad
+    ret
+
 
 asm_inthandler0d:
     sti

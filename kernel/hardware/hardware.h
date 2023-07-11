@@ -194,6 +194,7 @@ volatile uint memoryTest(uint start, uint end);
 void taskSwitch();
 
 /* asminc.asm */
+extern "C" void *asm_inthandler0c();
 extern "C" void *asm_inthandler0d();
 extern "C" void asm_inthandler21();
 extern "C" void asm_inthandler2c();

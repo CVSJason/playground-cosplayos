@@ -40,6 +40,7 @@ void initGdtAndIdt() {
     }
     load_idtr(0x7ff, idt);
     
+    setGateDescriptor(idt + 0x0c, (int)asm_inthandler0c, 2 * 8, AR_INTGATE32);
     setGateDescriptor(idt + 0x0d, (int)asm_inthandler0d, 2 * 8, AR_INTGATE32);
     setGateDescriptor(idt + 0x21, (int)asm_inthandler21, 2 * 8, AR_INTGATE32);
     setGateDescriptor(idt + 0x2c, (int)asm_inthandler2c, 2 * 8, AR_INTGATE32);

@@ -60,3 +60,14 @@ extern "C" void *inthandler0d(int *esp) {
     return &(task->tss.esp0);
 }
 
+extern "C" void *inthandler0c(int *esp) {
+    let consoleData = *(ConsoleData **)0x0fec;
+    let task = taskController->currentTask();
+
+    void _consolePutString(ConsoleData *consoleData, const char *str);
+
+    _consolePutString(consoleData, "\nThe app was stopped because of stack exception.");    
+
+    return &(task->tss.esp0);
+}
+
