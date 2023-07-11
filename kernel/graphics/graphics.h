@@ -22,8 +22,9 @@ public:
     LayerController(const LayerController&) = delete;
 
     void init(MemoryManager *manager, byte *vram, int width, int height);
-    Layer *newLayer(byte *buffer, int width, int height, byte transparentColor);
+    Layer *newLayer(byte *buffer, int width, int height, int transparentColor);
     void refresh(int clipX, int clipY, int clipWidth, int clipHeight, bool moved = false);
+    int getCount() { return topLayer; }
 
 private:
     void reorder(Layer *targetLayer, int oldZIndex);

@@ -13,7 +13,7 @@ void LayerController::init(MemoryManager *manager, byte *vram, int width, int he
     }
 }
 
-Layer *LayerController::newLayer(byte *buffer, int width, int height, byte transparentColor) {
+Layer *LayerController::newLayer(byte *buffer, int width, int height, int transparentColor) {
     for_until(i, 0, MAX_LAYER) {
         if (layerBuffer[i].flags == 0) {
             let layer = layerBuffer + i;

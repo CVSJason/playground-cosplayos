@@ -1,4 +1,4 @@
-CYLS equ 10
+CYLS equ 40
 
     org     0x7c00
 
@@ -76,7 +76,7 @@ error:
     jmp     forever
 
 succeed:
-    mov     [0x0ff0], ch
+    mov     byte [0x0ff0], CYLS
     jmp     0xc200
 
 puts:

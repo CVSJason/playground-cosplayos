@@ -4,6 +4,7 @@
 #include "../fs/fs.h"
 #include "programs.h"
 #include "stdio.h"
+#include "string.h"
 
 extern TaskController *taskController;
 extern TimerController *timerController;
@@ -12,7 +13,7 @@ extern MemoryManager *memoryManager;
 
 extern int totalMemory;
 
-uint appCSBase;
+uint appDSBase;
 
 void _consoleRefreshCursor(ConsoleData *consoleData, bool cursorLit) {
     let layer = consoleData->layer;
@@ -198,7 +199,7 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
         let _codeData = (byte *) memoryManager->allocatePageAlign(finfo->size + 16 + 64 * 1024);
         let codeData = (byte *)(((uint)_codeData + 0xf) & ~0xf);
 
-        appCSBase = (uint)codeData;
+        appDSBase = (uint)codeData;
         loadFileFat12(finfo->clusterId, finfo->size, codeData, consoleData->fat, (byte *)(DISKIMAGEADDR + 0x003e00));
 
         if (codeData[0] != 0x7f ||
@@ -206,7 +207,11 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             codeData[2] != 'L' ||
             codeData[3] != 'F')
         {
-            _consolePutString(consoleData, "failed to execute: not a executable file");
+            char str[100];
+
+            sprintf(str, "failed to execute: not a executable file (%08x, cluster = %d, size = %d)", *(int*)codeData, finfo->clusterId, finfo->size);
+
+            _consolePutString(consoleData, str);
             _consoleLineFeed(consoleData);
             _consoleLineFeed(consoleData);
             return;
@@ -241,11 +246,30 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
 extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
     let consoleData = *((ConsoleData **) 0x0fec);
     let thisTask = taskController->currentTask();
+    int *reg = &eax + 1;
 
     if (edx == 1) { 
         _consolePutCharUtf32(consoleData, eax);
     } else if (edx == 2) {
-        _consolePutString(consoleData, (char*) (appCSBase + ebx));
+        _consolePutString(consoleData, (char*) (appDSBase + ebx));
+    } else if (edx == 5) {
+        let layer = layerController->newLayer((byte*) (appDSBase + ebx), esi, edi, eax);
+        drawWindow(layer->buffer, layer->width, layer->height, (const char *) (appDSBase + ecx), eax, true);
+        layer->setPosition(100, 50);
+        layer->setZIndex(layerController->getCount());
+
+        reg[7] = (int) layer;
+    } else if (edx == 6) {
+        let layer = (Layer *) ebx;
+        let length = strlen((const char *) (appDSBase + ebp));
+        paintString(layer->buffer, layer->width, esi, edi, eax, (const char *) (appDSBase + ebp));
+        windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+        layerController->refresh(layer->x + esi, layer->y + edi, length * 8, 16);
+    } else if (edx == 7) {
+        let layer = (Layer *) ebx;
+        fillRect(layer->buffer, layer->width, ebp, eax, ecx, esi, edi);
+        windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+        layerController->refresh(layer->x + eax, layer->y + ecx, esi, edi);
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }

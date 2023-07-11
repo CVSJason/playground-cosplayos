@@ -1,4 +1,4 @@
-extern "C" void apiPutString(const char *str);
+#include "../api/cosplay.h"
 
 int main() {
     apiPutString("Hello, world!");

@@ -1,5 +1,5 @@
-forever: app.o ../api/libcosp.a
-	ld -T ../app.ld -o forever app.o -L../api -lcosp
+window: app.o ../api/libcosp.a
+	ld -T ../app.ld -o window app.o -L../api -lcosp
 
 app.o: app.cpp
 	clang++ app.cpp -o app.o -target x86_64-pc-none-gnu -m32 -std=c++17 -c
