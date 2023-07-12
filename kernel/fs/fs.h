@@ -20,10 +20,12 @@ struct ELF32Header {
     uint progHeaderOffset;
     uint sectionHeaderOffset;
     uint flags;
+    ushort headerSize;
     ushort progHeaderSize;
     ushort progHeaderCount;
     ushort sectionHeaderSize;
     ushort sectionHeaderCount;
+    ushort sectionNameStringTableOffset;
 };
 
 struct ELF32ProgramHeader {
@@ -35,6 +37,19 @@ struct ELF32ProgramHeader {
     uint sizeInMemory;
     uint flags;
     uint align;
+};
+
+struct ELF32SectionHeader {
+    uint sectionName;
+    uint sectionType;
+    uint sectionFlags;
+    uint sectionAddr;
+    uint sectionOffset;
+    uint sectionSize;
+    uint sectionLink;
+    uint sectionInfo;
+    uint sectionAlign;
+    uint sectionEntrySize;
 };
 
 void loadFat12To(int *fat, byte *source);

@@ -176,6 +176,71 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
         }
 
         _consoleLineFeed(consoleData);
+    } else if (_consoleCheckCommand(inputBuffer, "readelf")) {
+        let finfo = getFileInfo(inputBuffer + 8, fileInfo);
+
+        if (finfo == nullptr) {
+            _consolePutString(consoleData, "file does not exist");
+            _consoleLineFeed(consoleData);
+            _consoleLineFeed(consoleData);
+
+            return;
+        } 
+
+        let _codeData = (byte *) memoryManager->allocatePageAlign(finfo->size);
+        let codeData = (byte *)(((uint)_codeData + 0xf) & ~0xf);
+
+        appDSBase = (uint)codeData;
+        loadFileFat12(finfo->clusterId, finfo->size, codeData, consoleData->fat, (byte *)(DISKIMAGEADDR + 0x003e00));
+
+        if (codeData[0] != 0x7f ||
+            codeData[1] != 'E' ||
+            codeData[2] != 'L' ||
+            codeData[3] != 'F')
+        {
+            _consolePutString(consoleData, "failed to execute: not a executable file");
+            _consoleLineFeed(consoleData);
+            _consoleLineFeed(consoleData);
+            return;
+        }
+
+        let elfHeader = (ELF32Header *)codeData;
+
+        if (elfHeader->bits != 1 || elfHeader->instrSet != 3)
+        {
+            _consolePutString(consoleData, "failed to execute: can't run on this computer");
+            _consoleLineFeed(consoleData);
+            _consoleLineFeed(consoleData);
+            return;
+        }
+
+        let sectionHeaderStart = (byte*)(codeData + elfHeader->sectionHeaderOffset);
+        let programHeaderStart = (byte*)(codeData + elfHeader->progHeaderOffset);
+
+        let nameSection = (ELF32SectionHeader*)(sectionHeaderStart + elfHeader->sectionNameStringTableOffset * elfHeader->sectionHeaderSize);
+
+        _consolePutString(consoleData, "                    name    offset     size     addr\n");
+
+        for_until(i, 0, elfHeader->sectionHeaderCount) {
+            let sectionHeader = (ELF32SectionHeader*)(sectionHeaderStart + elfHeader->sectionHeaderSize * i);
+            let sectionName = (char*)(codeData + nameSection->sectionOffset + sectionHeader->sectionName);
+
+            char str[100];
+            
+            sprintf(str, "section(%16s) %08x+%08x %08x %s", 
+                sectionName,
+                sectionHeader->sectionOffset,
+                sectionHeader->sectionSize,
+                sectionHeader->sectionAddr,
+                strcmp(sectionName, ".bss") == 0 ? "(bss)" : ""
+            );
+            _consolePutString(consoleData, str);
+            _consoleLineFeed(consoleData);
+        }
+
+        memoryManager->releasePageAlign(_codeData, finfo->size);
+
+        _consoleLineFeed(consoleData);
     } else if (inputBuffer[0] != 0) {
         var args = inputBuffer;
 
@@ -196,7 +261,8 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             return;
         } 
 
-        let _codeData = (byte *) memoryManager->allocatePageAlign(finfo->size + 16 + 64 * 1024);
+        let codeDataSize = finfo->size + 16 + 64 * 1024;
+        let _codeData = (byte *) memoryManager->allocatePageAlign(codeDataSize);
         let codeData = (byte *)(((uint)_codeData + 0xf) & ~0xf);
 
         appDSBase = (uint)codeData;
@@ -207,11 +273,7 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             codeData[2] != 'L' ||
             codeData[3] != 'F')
         {
-            char str[100];
-
-            sprintf(str, "failed to execute: not a executable file (%08x, cluster = %d, size = %d)", *(int*)codeData, finfo->clusterId, finfo->size);
-
-            _consolePutString(consoleData, str);
+            _consolePutString(consoleData, "failed to execute: not a executable file");
             _consoleLineFeed(consoleData);
             _consoleLineFeed(consoleData);
             return;
@@ -227,17 +289,36 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             return;
         }
 
-        let programHeaderStart = (byte*)(codeData + elfHeader->progHeaderOffset);
+        let sectionHeaderStart = (byte*)(codeData + elfHeader->sectionHeaderOffset);
+        var bssSize = 0;
+
+        let nameSection = (ELF32SectionHeader*)(sectionHeaderStart + elfHeader->sectionNameStringTableOffset * elfHeader->sectionHeaderSize);
+
+        for_until(i, 0, elfHeader->sectionHeaderCount) {
+            let sectionHeader = (ELF32SectionHeader*)(sectionHeaderStart + elfHeader->sectionHeaderSize * i);
+            let sectionName = (char*)(codeData + nameSection->sectionOffset + sectionHeader->sectionName);
+
+            if (strcmp(sectionName, ".bss") == 0) {
+                bssSize = sectionHeader->sectionSize;
+            };
+        }
+
+        let dataSegmentSize = codeDataSize + bssSize;
+        let _dataSegment = (byte *) memoryManager->allocatePageAlign(dataSegmentSize);
+        let dataSegment = (byte *)(((uint)_dataSegment + 0xf) & ~0xf);
+
+        memcpy(codeData, dataSegment, finfo->size + bssSize + 64 * 1024);
 
         let gdt = (SegmentDescriptor *) GDT_ADDR;
-        setSegmentDescriptor(gdt + 1003, finfo->size - 1, (uint)codeData, AR_CODE32_ER + 0x60);
-        setSegmentDescriptor(gdt + 1004, finfo->size - 1, (uint)codeData, AR_DATA32_RW + 0x60);
+        setSegmentDescriptor(gdt + 1003, finfo->size - 1, (uint)codeData,    AR_CODE32_ER + 0x60);
+        setSegmentDescriptor(gdt + 1004, finfo->size - 1, (uint)dataSegment, AR_DATA32_RW + 0x60);
 
         let thisTask = taskController->currentTask();
 
         startApp(elfHeader->entry, 1003 * 8, finfo->size - 1, 1004 * 8, &(thisTask->tss.esp0));
 
-        memoryManager->releasePageAlign(_codeData, finfo->size);
+        memoryManager->releasePageAlign(_codeData,    codeDataSize);
+        memoryManager->releasePageAlign(_dataSegment, dataSegmentSize);
 
         _consoleLineFeed(consoleData);
     }
@@ -253,23 +334,46 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
     } else if (edx == 2) {
         _consolePutString(consoleData, (char*) (appDSBase + ebx));
     } else if (edx == 5) {
-        let layer = layerController->newLayer((byte*) (appDSBase + ebx), esi, edi, eax);
+        let layer = layerController->newLayer((byte*) (appDSBase + ebx), esi, edi + 24, eax);
         drawWindow(layer->buffer, layer->width, layer->height, (const char *) (appDSBase + ecx), eax, true);
         layer->setPosition(100, 50);
         layer->setZIndex(layerController->getCount());
 
         reg[7] = (int) layer;
     } else if (edx == 6) {
-        let layer = (Layer *) ebx;
+        let layer = (Layer *) ((uint)ebx & ~0x1u);
         let length = strlen((const char *) (appDSBase + ebp));
-        paintString(layer->buffer, layer->width, esi, edi, eax, (const char *) (appDSBase + ebp));
-        windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
-        layerController->refresh(layer->x + esi, layer->y + edi, length * 8, 16);
+
+        paintString(layer->buffer, layer->width, esi, edi + 24, eax, (const char *) (appDSBase + ebp));
+
+        if ((ebx & 1) == 0) {
+            windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+            layerController->refresh(layer->x + esi, layer->y + edi + 24, length * 8, 16);
+        }
+            
     } else if (edx == 7) {
+        let layer = (Layer *) ((uint)ebx & ~0x1u);
+        fillRect(layer->buffer, layer->width, ebp, eax, ecx + 24, esi, edi);
+
+        if ((ebx & 1) == 0) {
+            windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+            layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi, edi);
+        }
+            
+    } else if (edx == 11) {
+        let layer = (Layer *) ((uint)ebx & ~0x1u);
+
+        layer->buffer[(edi + 24) * layer->width + esi] = eax;
+
+        if ((ebx & 1) == 0) {
+            windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+            layerController->refresh(layer->x + esi, layer->y + edi + 24, 1, 1);
+        }
+    } else if (edx == 12) {
         let layer = (Layer *) ebx;
-        fillRect(layer->buffer, layer->width, ebp, eax, ecx, esi, edi);
+
         windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
-        layerController->refresh(layer->x + eax, layer->y + ecx, esi, edi);
+            layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi, edi);
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }

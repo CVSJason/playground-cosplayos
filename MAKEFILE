@@ -5,7 +5,7 @@ OBJECTS = \
 	temp/programs/console.o \
 	temp/fs/fs.o
 
-APPS = fs_root/hello fs_root/helloc fs_root/window
+APPS = fs_root/hello fs_root/helloc fs_root/window fs_root/star
 
 make:
 	make -f makefile cosplay.img

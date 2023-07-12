@@ -54,14 +54,6 @@ void paintStringToLayerAndRefresh(Layer *layer, int x, int y, byte fg, byte bg, 
     ((LayerController *)layer->layerController)->refresh(layer->x + startX, layer->y + y, x - startX, 16);
 }
 
-void blit(byte *vram, int screenWidth, byte *texture, int x, int y, int width, int height) {
-    for_until(currY, 0, height) {
-        for_until(currX, 0, width) {
-            vram[(currY + y) * screenWidth + (currX + x)] = texture[currY * width + currX];
-        }
-    }
-}
-
 void drawBackground(byte *vram, int screenWidth, int screenHeight) {
     // 背景
     fillRect(vram, screenWidth, HARIB_COL_088, 0, 0, screenWidth, screenHeight);

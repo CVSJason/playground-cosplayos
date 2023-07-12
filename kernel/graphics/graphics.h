@@ -62,7 +62,6 @@ void paintChar(byte *vram, int screenWidth, int x, int y, byte color, char chara
 void paintString(byte *vram, int screenWidth, int x, int y, byte color, const char *str);
 void paintStringToLayerAndRefresh(Layer *layer, int x, int y, byte fg, byte bg, const char *str);
 
-void blit(byte *vram, int screenWidth, byte *texture, int x, int y, int width, int height);
 void drawBackground(byte *vram, int screenWidth, int screenHeight);
 void drawWindow(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive);
 void drawWindowCaption(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive);

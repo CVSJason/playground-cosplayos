@@ -8,5 +8,6 @@ SECTIONS
     .text (. + 0x1000) : { *(.text) }
     . = ALIGN(0x1000);
 
-    .data : { *(.data .rodata* .bss) }
+    .data . : { *(.data .rodata*) }
+    .bss  . : { *(.bss) }
 }
