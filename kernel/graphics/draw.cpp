@@ -7,11 +7,64 @@ void fillRect(byte *vram, int screenWidth, byte color, int x, int y, int width, 
     let xEnd = x + width, yEnd = y + height;
 
     for_until(currY, y, yEnd) {
-        for_until(currX, x, xEnd) {
+        for_until(currX, x, xEnd) { 
             vram[currY * screenWidth + currX] = color;
         }
     }
 }
+
+void drawLine(byte *vram, int screenWidth, int x0, int y0, int x1, int y1, byte color) {
+    var dx = x1 - x0, dy = y1 - y0;
+
+    var x = x0 << 10;
+    var y = y0 << 10;
+
+    int len;
+
+    if (dx < 0) {
+        dx = -dx;
+    }
+
+    if (dy < 0) {
+        dy = -dy;
+    }
+
+    if (dx >= dy) {
+        len = dx + 1;
+
+        if (x0 > x1) {
+            dx = -1024;
+        } else {
+            dx = 1024;
+        }
+
+        if (y0 <= y1) {
+            dy = ((y1 - y0 + 1) << 10) / len;
+        } else {
+            dy = ((y1 - y0 - 1) << 10) / len;
+        }
+    } else {
+        len = dy + 1;
+        
+        if (y0 > y1) {
+            dy = -1024;
+        } else {
+            dy = 1024;
+        }
+
+        if (x0 <= x1) {
+            dx = ((x1 - x0 + 1) << 10) / len; 
+        } else {
+            dx = ((x1 - x0 - 1) << 10) / len;
+        }
+    }
+
+    for_until(i, 0, len) {
+        vram[(y >> 10) * screenWidth + (x >> 10)] = color;
+        x += dx;
+        y += dy;
+    }
+} 
 
 extern byte asciiFont[];
 

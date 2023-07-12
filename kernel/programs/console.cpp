@@ -373,7 +373,16 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
         let layer = (Layer *) ebx;
 
         windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
-            layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi, edi);
+        layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi, edi);
+    } else if (edx == 13) {
+        let layer = (Layer *) ((uint)ebx & ~0x1u);
+
+        drawLine(layer->buffer, layer->width, eax, ecx + 24, esi, edi + 24, (byte)ebp);
+
+        if ((ebx & 1) == 0) {
+            windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
+            layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi - eax, edi - ecx);
+        }
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }

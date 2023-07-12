@@ -58,6 +58,7 @@ void initPalette();
 
 /* draw.cpp */
 void fillRect(byte *vram, int screenWidth, byte color, int x, int y, int width, int height);
+void drawLine(byte *vram, int screenWidth, int x0, int y0, int x1, int y1, byte color);
 void paintChar(byte *vram, int screenWidth, int x, int y, byte color, char chara);
 void paintString(byte *vram, int screenWidth, int x, int y, byte color, const char *str);
 void paintStringToLayerAndRefresh(Layer *layer, int x, int y, byte fg, byte bg, const char *str);

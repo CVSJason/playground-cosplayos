@@ -3,7 +3,8 @@ bits 32
 
     extern  main
 
-    global  __cosplay_main, apiPutCharUtf32, apiPutString, apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh
+    global  __cosplay_main, apiPutCharUtf32, apiPutString
+    global  apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh, apiDrawLine
 
 section .text
 
@@ -109,6 +110,46 @@ apiSetPixel:
     mov     eax, [esp + 28]
     int     0x40
     pop     ebx
+    pop     esi
+    pop     edi
+    ret
+
+apiRefresh:
+    push    edi
+    push    esi
+    push    ebx
+    mov     edx, 12
+    mov     ebx, [esp + 16]
+    mov     eax, [esp + 20]
+    mov     ecx, [esp + 24]
+    mov     esi, [esp + 28]
+    mov     edi, [esp + 32]
+    int     0x40
+    pop     ebx
+    pop     esi
+    pop     edi
+    ret
+
+apiDrawLine:
+    push    edi
+    push    esi
+    push    ebp
+    push    ebx
+    mov     edx, 13
+    mov     ebx, [esp + 20]
+    mov     al,  [esp + 44]
+    cmp     al, 0
+    jne     .cont
+    add     ebx, 1
+.cont:
+    mov     eax, [esp + 24]
+    mov     ecx, [esp + 28]
+    mov     esi, [esp + 32]
+    mov     edi, [esp + 36]
+    mov     ebp, [esp + 40]
+    int     0x40
+    pop     ebx
+    pop     ebp
     pop     esi
     pop     edi
     ret
