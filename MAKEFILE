@@ -5,7 +5,7 @@ OBJECTS = \
 	temp/programs/console.o \
 	temp/fs/fs.o
 
-APPS = fs_root/hello fs_root/helloc fs_root/window fs_root/star fs_root/lines
+APPS = fs_root/hello fs_root/helloc fs_root/window fs_root/star fs_root/lines fs_root/noodle
 
 make:
 	make -f makefile cosplay.img
@@ -15,7 +15,7 @@ makeclean:
 	make -f makefile clean
 
 clean:
-	rm *.o *.bin
+	rm *.o *.bin temp/*.o temp/*/*.o
 
 cosplay.img: mbr.bin fs_root/cosplay.sys $(APPS)
 	python3 ./writefile.py ./cosplay.img ./mbr.bin ./fs_root

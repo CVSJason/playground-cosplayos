@@ -19,6 +19,32 @@ struct BootInfo {
     byte *vram;
 };
 
+struct TSS32 {
+    int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
+    int eip, eflags, eax, ecx, edx, ebx, esp, ebp, esi, edi;
+    int es, cs, ss, ds, fs, gs;
+    int ldtr, iomap;
+};
+
+#define MAX_TASKS      1000
+#define MAX_TASKS_IN_LEVEL 100
+#define TASK_GDT_START 3
+#define MAX_TASK_LEVELS 10
+
+struct Task {
+    int gdtId, flags;
+    TSS32 tss;
+    int priority, level;
+    void *taskController;
+    UIntQueue *queue;
+};
+
+struct TaskLevel {
+    int count;
+    int current;
+    Task *tasks[MAX_TASKS_IN_LEVEL];
+};
+
 struct MouseData {
     char buffer[3];
     int phase;
@@ -64,9 +90,11 @@ struct Timer {
     UIntQueue *queue;
     Timer *nextTimer;
     void *timerController;
+    Task *task;
 
     void release();
     void reset(uint timeoutTime, uint dataToSend);
+    void cancel();
 };
 
 class TimerController {
@@ -81,40 +109,15 @@ public:
         nextTimer = timers + 0;
     }
 
-    Timer *newTimer(UIntQueue *ByteQueue, uint timeoutTime, uint dataToSend);
+    Timer *newTimer(UIntQueue *ByteQueue, uint timeoutTime, uint dataToSend, Task *task = nullptr);
     void proceed();
     uint current() { return timer; }
+    void removeTimersAssociatedWithTask(Task *);
 
 private:
     void addTimer(Timer *timer);
     uint timer;
     Timer timers[MAX_TIMER], *nextTimer;
-};
-
-struct TSS32 {
-    int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
-    int eip, eflags, eax, ecx, edx, ebx, esp, ebp, esi, edi;
-    int es, cs, ss, ds, fs, gs;
-    int ldtr, iomap;
-};
-
-#define MAX_TASKS      1000
-#define MAX_TASKS_IN_LEVEL 100
-#define TASK_GDT_START 3
-#define MAX_TASK_LEVELS 10
-
-struct Task {
-    int gdtId, flags;
-    TSS32 tss;
-    int priority, level;
-    void *taskController;
-    UIntQueue *queue;
-};
-
-struct TaskLevel {
-    int count;
-    int current;
-    Task *tasks[MAX_TASKS_IN_LEVEL];
 };
 
 class TaskController {

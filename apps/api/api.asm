@@ -5,7 +5,8 @@ bits 32
 
     global  __cosplay_main, apiPutCharUtf32, apiPutString
     global  apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh, apiDrawLine, apiCloseWindow
-    global  apiReadKey
+    global  apiReadKey, apiReadQueue
+    global  apiCreateTimer, apiResetTimer, apiReleaseTimer
 
 section .text
 
@@ -168,4 +169,40 @@ apiReadKey:
     mov     eax, 0
     mov     al, [esp + 4]
     int     0x40
+    ret
+
+apiReadQueue:
+    mov     edx, 8
+    mov     eax, 0
+    mov     al, [esp + 4]
+    int     0x40
+    ret
+
+apiCreateTimer:
+    push    ecx
+    mov     edx, 16
+    mov     eax, [esp + 8]
+    mov     ecx, [esp + 12]
+    int     0x40
+    pop     ecx
+    ret
+
+apiResetTimer:
+    push    ebx
+    push    ecx
+    mov     edx, 17
+    mov     ebx, [esp + 12]
+    mov     eax, [esp + 16]
+    mov     ecx, [esp + 20]
+    int     0x40
+    pop     ecx
+    pop     ebx
+    ret
+
+apiReleaseTimer:
+    push    ebx
+    mov     edx, 19
+    mov     ebx, [esp + 8]
+    int     0x40
+    pop     ebx
     ret

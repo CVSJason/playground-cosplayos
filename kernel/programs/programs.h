@@ -5,7 +5,7 @@ struct ConsoleData {
     int nextCursorX, nextCursorY;
     int *fat;
     Timer *cursorTimer;
-    UIntQueue *ioQueue;
+    UIntQueue *ioQueue, *appIOQueue;
     bool cursorEnabled;
 };
 

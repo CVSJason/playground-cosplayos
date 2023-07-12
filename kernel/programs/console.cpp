@@ -289,11 +289,8 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             return;
         } 
 
-        let codeDataSize = finfo->size + 16 + 64 * 1024;
-        let _codeData = (byte *) memoryManager->allocatePageAlign(codeDataSize);
-        let codeData = (byte *)(((uint)_codeData + 0xf) & ~0xf);
+        let codeData = (byte *) memoryManager->allocatePageAlign(finfo->size);
 
-        appDSBase = (uint)codeData;
         loadFileFat12(finfo->clusterId, finfo->size, codeData, consoleData->fat, (byte *)(DISKIMAGEADDR + 0x003e00));
 
         if (codeData[0] != 0x7f ||
@@ -331,26 +328,36 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
             };
         }
 
-        let dataSegmentSize = codeDataSize + bssSize;
-        let _dataSegment = (byte *) memoryManager->allocatePageAlign(dataSegmentSize);
+        let dataSegmentSize = finfo->size + 64 * 1024 + bssSize;
+        let _dataSegment = (byte *) memoryManager->allocatePageAlign(dataSegmentSize + 16);
         let dataSegment = (byte *)(((uint)_dataSegment + 0xf) & ~0xf);
 
-        memcpy(codeData, dataSegment, finfo->size + bssSize + 64 * 1024);
+        appDSBase = (uint)dataSegment;
+
+        memcpy(codeData, dataSegment, finfo->size);
 
         let gdt = (SegmentDescriptor *) GDT_ADDR;
-        setSegmentDescriptor(gdt + 1003, finfo->size - 1, (uint)codeData,    AR_CODE32_ER + 0x60);
-        setSegmentDescriptor(gdt + 1004, finfo->size - 1, (uint)dataSegment, AR_DATA32_RW + 0x60);
+        setSegmentDescriptor(gdt + 1003, dataSegmentSize, (uint)dataSegment, AR_CODE32_ER + 0x60);
+        setSegmentDescriptor(gdt + 1004, dataSegmentSize, (uint)dataSegment, AR_DATA32_RW + 0x60);
 
         let thisTask = taskController->currentTask();
 
-        startApp(elfHeader->entry, 1003 * 8, finfo->size - 1, 1004 * 8, &(thisTask->tss.esp0));
+        let appIOQueueBuffer = (uint *)memoryManager->allocate(1024);
+        UIntQueue appIOQueue(appIOQueueBuffer, 1024, thisTask);
+        consoleData->appIOQueue = &appIOQueue;
+
+        startApp(elfHeader->entry, 1003 * 8, finfo->size + bssSize, 1004 * 8, &(thisTask->tss.esp0));
+
+        memoryManager->release(appIOQueueBuffer, 1024);
+        consoleData->appIOQueue = nullptr;
 
         layerController->releaseLayersAssociatedWithTask(thisTask);
+        timerController->removeTimersAssociatedWithTask(thisTask);
 
         memset(_dataSegment, 0, (size_t)dataSegmentSize);
 
-        memoryManager->releasePageAlign(_codeData,    codeDataSize);
-        memoryManager->releasePageAlign(_dataSegment, dataSegmentSize);
+        memoryManager->releasePageAlign(codeData,     finfo->size);
+        memoryManager->releasePageAlign(_dataSegment, dataSegmentSize + 16);
 
         _consoleLineFeed(consoleData);
     }
@@ -396,6 +403,24 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
             layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi, edi);
         }
             
+    } else if (edx == 8) {
+        forever {
+            io_cli();
+
+            if (!consoleData->appIOQueue->isEmpty()) {
+                reg[7] = consoleData->appIOQueue->pop();
+                io_sti();
+                return nullptr;
+            }
+
+            if (!eax) {
+                reg[7] = -1;
+                io_sti();
+                return nullptr;
+            }
+
+            io_stihlt();
+        }
     } else if (edx == 11) {
         let layer = (Layer *) ((uint)ebx & ~0x1u);
 
@@ -457,6 +482,14 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
 
             io_stihlt();
         }
+    } else if (edx == 16) {
+        reg[7] = (int)timerController->newTimer(consoleData->appIOQueue, eax + timerController->current(), ecx, thisTask);
+    } else if (edx == 17) {
+        ((Timer *)ebx)->reset(eax + timerController->current(), ecx);
+    } else if (edx == 19) {
+        let timer = ((Timer *)ebx);
+
+        timer->release();
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }

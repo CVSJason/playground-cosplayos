@@ -25,11 +25,12 @@ void TimerController::proceed() {
     }
 }
 
-Timer *TimerController::newTimer(UIntQueue *queue, uint timeoutTime, uint dataToSend) {
+Timer *TimerController::newTimer(UIntQueue *queue, uint timeoutTime, uint dataToSend, Task *task) {
     for_until(i, 0, MAX_TIMER) {
         if (timers[i].flags == 0) {
             timers[i].timerController = this;
             timers[i].queue = queue;
+            timers[i].task = task;
             timers[i].reset(timeoutTime, dataToSend);
             
             return timers + i;
@@ -40,10 +41,18 @@ Timer *TimerController::newTimer(UIntQueue *queue, uint timeoutTime, uint dataTo
 }
 
 void Timer::release() {
+    if (flags == TIMER_FLAGS_USING) {
+        cancel();
+    }
+
     flags = 0;
 }
 
 void Timer::reset(uint timeoutTime, uint dataToSend) {
+    if (flags == TIMER_FLAGS_USING) {
+        cancel();
+    }
+
     this->timeoutTime = timeoutTime;
     this->dataToSend = dataToSend;
     this->flags = TIMER_FLAGS_USING;
@@ -71,3 +80,51 @@ void TimerController::addTimer(Timer *timer) {
     timer->nextTimer = current->nextTimer;
     current->nextTimer = timer;
 }   
+
+void Timer::cancel() {
+    let eflags = io_load_eflags();
+    let timerController = ((TimerController *)this->timerController);
+
+    io_cli();
+
+    if (flags == TIMER_FLAGS_USING) {
+        if (this == timerController->nextTimer) {
+            timerController->nextTimer = timerController->nextTimer->nextTimer;
+        } else {
+            var curr = timerController->nextTimer;
+
+            while (this != curr->nextTimer) {
+                curr = curr->nextTimer;
+            }
+
+            curr->nextTimer = curr->nextTimer->nextTimer;
+        }
+
+        flags = TIMER_FLAGS_IDLE;
+        io_store_eflags(eflags);
+        return;
+    }
+
+    io_store_eflags(eflags);
+    return;
+}
+
+void TimerController::removeTimersAssociatedWithTask(Task *task) {
+    let eflags = io_load_eflags();
+
+    io_cli();
+
+    while (nextTimer->task == task) nextTimer = nextTimer->nextTimer;
+
+    var currentTimer = nextTimer;
+
+    while (currentTimer->nextTimer != nullptr) {
+        while (currentTimer->nextTimer->task == task) {
+            currentTimer->nextTimer = currentTimer->nextTimer->nextTimer;
+        }
+
+        currentTimer = currentTimer->nextTimer;
+    }
+
+    io_store_eflags(eflags);
+}

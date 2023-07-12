@@ -130,9 +130,9 @@ void drawWindowCaption(byte *vram, int width, int height, const char *name, byte
     let textWidth = strlen(name) * 8;
     let textCol = isActive ? HARIB_COL_000 : HARIB_COL_888;
 
-    let textCenter = (width - 32) / 2;
+    let textCenter = (width - 24) / 2;
 
-    if (textWidth > width - 8) {
+    if (textWidth > width - 24) {
         paintString(vram, width, textCenter - 12, 4, textCol, "...");
         paintString(vram, width, textCenter - 12 + 1, 4, textCol, "...");
     } else {
@@ -157,7 +157,7 @@ void recolorWindowCaption(Layer *layer, bool isActive) {
     let width = layer->width, height = layer->height;
 
     for_until(y, 4, 20) {
-        for_until(x, 1, width - 32) {
+        for_until(x, 1, width - 24) {
             if (vram[y * width + x] == fromColor) vram[y * width + x] = toColor;
         }
     }
