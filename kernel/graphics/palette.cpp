@@ -26,7 +26,7 @@ void setPalette(int start, int end, unsigned char *data) {
     io_cli();
     io_out8(0x03c8, start);
 
-    for (int i = start; i <= end; i++) {
+    for (int i = start; i < end; i++) {
         io_out8(0x03c9, data[0] >> 2);
         io_out8(0x03c9, data[1] >> 2);
         io_out8(0x03c9, data[2] >> 2);
@@ -39,4 +39,20 @@ void setPalette(int start, int end, unsigned char *data) {
 
 void initPalette() {
     setPalette(0, 16, colorData);
+
+	static byte otherColorData[216 * 3];
+
+	for_until(b, 0, 6) {
+		for_until(g, 0, 6) {
+			for_until(r, 0, 6) {
+				let baseIdx = (r + g * 6 + b * 36) * 3;
+
+				otherColorData[baseIdx + 0] = r * 51;
+				otherColorData[baseIdx + 1] = g * 51;
+				otherColorData[baseIdx + 2] = b * 51;
+			}
+		}
+	}
+
+	setPalette(40, 256, otherColorData);
 }
