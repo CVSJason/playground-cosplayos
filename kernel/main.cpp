@@ -16,6 +16,8 @@ LayerController *layerController;
 TimerController *timerController;
 TaskController *taskController;
 
+Layer *currentFocusedLayer = nullptr;
+
 int totalMemory;
 
 void taskBProgram(Layer *layer) {
@@ -29,6 +31,26 @@ void taskBProgram(Layer *layer) {
             char str[12];
             sprintf(str, "%10d", count);
             paintStringToLayerAndRefresh(layer, 4, 28, HARIB_COL_000, 16, str);
+        }
+    }
+}
+
+void switchFocusedLayer(Layer *layer) {
+    if (currentFocusedLayer != nullptr && currentFocusedLayer->flags != 0) {
+        recolorWindowCaption(currentFocusedLayer, false);
+
+        if (currentFocusedLayer->task != nullptr) {
+            currentFocusedLayer->task->queue->push(0, IOQUEUE_CONTROL_IN);
+        }
+    }
+
+    currentFocusedLayer = layer;
+
+    if (currentFocusedLayer != nullptr && currentFocusedLayer->flags != 0) {
+        recolorWindowCaption(currentFocusedLayer, true);
+
+        if (currentFocusedLayer->task != nullptr) {
+            currentFocusedLayer->task->queue->push(1, IOQUEUE_CONTROL_IN);
         }
     }
 }
@@ -93,6 +115,8 @@ extern "C" int main() {
 
     layerController->refresh(0, 0, screenWidth, screenHeight, true);
 
+    currentFocusedLayer = windowLayer;
+
     //
     // 初始化任务
     //
@@ -126,6 +150,8 @@ extern "C" int main() {
     
     var commandL = false, commandR = false;
     var controlL = false, controlR = false;
+    var mouseL = false, inMoveMode = false;
+    var moveModeMouseRelX = -1, moveModeMouseRelY = -1;
 
     forever {
         io_cli();
@@ -142,23 +168,7 @@ extern "C" int main() {
                 if (data == 0xe0 && !e0flag) {
                     e0flag = true;
                 } else {
-                    
-
-                    if (data == 0x0f) { // Tab
-                        consoleIsActive = !consoleIsActive;
-
-                        if (consoleIsActive) {
-                            drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, true);
-                        } else {
-                            drawWindowCaption(windowLayer->buffer, windowLayer->width, windowLayer->height, "gosh", 99, false);
-                        }
-
-                        consoleTask->queue->push(consoleIsActive ? 1 : 0, IOQUEUE_CONTROL_IN);
-                        
-                        layerController->refresh(windowLayer->x, windowLayer->y, windowLayer->width, 24);
-
-                        continue;
-                    } else if (data == 0x3a) { // caps
+                    if (data == 0x3a) { // caps
                         bootInfo->leds ^= 4;
                         ioQueue->push(KEYCOMMAND_LED, IOQUEUE_KEYBOARD_OUT);
                         ioQueue->push(bootInfo->leds, IOQUEUE_KEYBOARD_OUT);
@@ -187,6 +197,8 @@ extern "C" int main() {
                         if (e0flag) controlL = true; else controlR = true;
                     } else if (data == 0x9d) {
                         if (e0flag) controlL = false; else controlR = false;
+                    } else if (data == 0x57) {
+                        layerController->getLayer(1)->setZIndex(layerController->getCount() - 1);
                     } else {
                         if ((controlL || controlR) && data == 0x2e) {
                             if (consoleTask->tss.ss0 != 0) {
@@ -250,8 +262,53 @@ extern "C" int main() {
                     if (mouseData.x >= screenWidth) mouseData.x = screenWidth - 1;
                     if (mouseData.y > screenHeight) mouseData.y = screenHeight;
 
-                    if (mouseData.button & 0x01) {
-                        toRedrawWindow = true;
+                    if ((mouseData.button & 0x01) && !mouseL) {
+                        for (var j = layerController->getCount() - 1; j > 0; j--) {
+                            let layer = layerController->getLayer(j);
+
+                            let relativeX = mouseData.x - layer->x,
+                                relativeY = mouseData.y - layer->y;
+
+                            if (relativeX >= 0 && relativeX < layer->width && relativeY >= 0 && relativeY < layer->height &&
+                                layer->buffer[relativeY * layer->width + relativeX] != layer->transparentColor) {
+
+                                if (currentFocusedLayer != layer) {
+                                    switchFocusedLayer(layer);
+                                }
+                                
+                                if (j != layerController->getCount() - 1) {
+                                    layer->setZIndex(layerController->getCount() - 1);
+                                }
+
+                                if (relativeY < 24) {
+                                    if (relativeY >= 4 && relativeY < 20 &&
+                                        layer->width - relativeX > 4 && layer->width - relativeX <= 20 &&
+                                        layer->task != nullptr) {
+                                        let consoleData = *((ConsoleData **) 0x0fec);
+
+                                        io_cli();
+                                        
+                                        consoleTask->tss.eax = (int) &(consoleTask->tss.esp0);
+                                        consoleTask->tss.eip = (int) endApp;
+
+                                        io_sti();
+                                    } else {
+                                        inMoveMode = true;
+
+                                        moveModeMouseRelX = relativeX;
+                                        moveModeMouseRelY = relativeY;
+                                    }
+                                }
+
+                                break;
+                            }
+                        }
+                    }
+
+                    mouseL = (mouseData.button & 0x01) != 0;
+
+                    if (inMoveMode && !mouseL) {
+                        inMoveMode = false;
                     }
 
                     toRedrawCursor = true;
@@ -268,13 +325,21 @@ extern "C" int main() {
         if (toRedrawCursor) {
             io_sti();
 
+            if (inMoveMode) {
+                let targetLayer = layerController->getLayer(layerController->getCount() - 1);
+
+                if (mouseData.y - moveModeMouseRelY < 24) {
+                    mouseData.y += 24 - (mouseData.y - moveModeMouseRelY);
+                }
+
+                if (mouseData.y - moveModeMouseRelY + targetLayer->height > screenHeight - 56) {
+                    mouseData.y -= (mouseData.y - moveModeMouseRelY + targetLayer->height) - (screenHeight - 56);
+                }
+
+                targetLayer->setPosition(mouseData.x - moveModeMouseRelX, mouseData.y - moveModeMouseRelY);
+            }
+
             mouseLayer->setPosition(mouseData.x, mouseData.y);
-        }
-
-        if (toRedrawWindow) {
-            io_sti();
-
-            windowLayer->setPosition(mouseData.x - windowLayer->width / 2, mouseData.y - 12);
         }
 
         io_sti();

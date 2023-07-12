@@ -12,5 +12,9 @@ int main() {
 
     apiRefresh(window, 0, 0, 96, 48);
 
+    while (apiReadKey(true) != 0x1c);
+
+    apiCloseWindow(window);
+
     return 0;
 }

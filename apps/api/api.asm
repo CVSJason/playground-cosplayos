@@ -4,7 +4,8 @@ bits 32
     extern  main
 
     global  __cosplay_main, apiPutCharUtf32, apiPutString
-    global  apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh, apiDrawLine
+    global  apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh, apiDrawLine, apiCloseWindow
+    global  apiReadKey
 
 section .text
 
@@ -152,4 +153,19 @@ apiDrawLine:
     pop     ebp
     pop     esi
     pop     edi
+    ret
+
+apiCloseWindow:
+    push    ebx
+    mov     edx, 14
+    mov     ebx, [esp + 8]
+    int     0x40
+    pop     ebx
+    ret
+
+apiReadKey:
+    mov     edx, 15
+    mov     eax, 0
+    mov     al, [esp + 4]
+    int     0x40
     ret

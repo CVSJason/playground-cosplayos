@@ -111,8 +111,17 @@ void drawBackground(byte *vram, int screenWidth, int screenHeight) {
     // 背景
     fillRect(vram, screenWidth, HARIB_COL_088, 0, 0, screenWidth, screenHeight);
 
+    // 菜单栏
+    fillRect(vram, screenWidth, HARIB_COL_CCC, 0, 0, screenWidth, 24);
+
+    paintString(vram, screenWidth, 16, 4, HARIB_COL_000, "Co   Find-sist-er   File   Edit   Help");
+    paintString(vram, screenWidth, 17, 4, HARIB_COL_000, "Co   Find-sist-er");
+
+    static let timeString = "12 July 2023  25:79";
+    paintString(vram, screenWidth, screenWidth - 16 - strlen(timeString) * 8, 4, HARIB_COL_000, timeString);
+
     // 任务栏
-    fillRect(vram, screenWidth, HARIB_COL_CCC, 0, screenHeight - 32, screenWidth, 32);
+    fillRect(vram, screenWidth, HARIB_COL_CCC, screenWidth / 2 - 48 / 2, screenHeight - 56, 48, 48);
 }
 
 void drawWindowCaption(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive) {
@@ -121,12 +130,14 @@ void drawWindowCaption(byte *vram, int width, int height, const char *name, byte
     let textWidth = strlen(name) * 8;
     let textCol = isActive ? HARIB_COL_000 : HARIB_COL_888;
 
+    let textCenter = (width - 32) / 2;
+
     if (textWidth > width - 8) {
-        paintString(vram, width, width / 2 - 12, 4, textCol, "...");
-        paintString(vram, width, width / 2 - 12 + 1, 4, textCol, "...");
+        paintString(vram, width, textCenter - 12, 4, textCol, "...");
+        paintString(vram, width, textCenter - 12 + 1, 4, textCol, "...");
     } else {
-        paintString(vram, width, width / 2 - textWidth / 2, 4, textCol, name);
-        paintString(vram, width, width / 2 - textWidth / 2 + 1, 4, textCol, name);
+        paintString(vram, width, textCenter - textWidth / 2, 4, textCol, name);
+        paintString(vram, width, textCenter - textWidth / 2 + 1, 4, textCol, name);
     }
 
     // 关闭键
@@ -137,6 +148,22 @@ void drawWindowCaption(byte *vram, int width, int height, const char *name, byte
 
     windowRoundCorner(vram, width, height, transparentColor);
 } 
+
+void recolorWindowCaption(Layer *layer, bool isActive) {
+    let fromColor = isActive ? HARIB_COL_888 : HARIB_COL_000;
+    let toColor   = isActive ? HARIB_COL_000 : HARIB_COL_888;
+
+    let vram = layer->buffer;
+    let width = layer->width, height = layer->height;
+
+    for_until(y, 4, 20) {
+        for_until(x, 1, width - 32) {
+            if (vram[y * width + x] == fromColor) vram[y * width + x] = toColor;
+        }
+    }
+
+    ((LayerController *)layer->layerController)->refresh(layer->x + 1, layer->y + 4, width - 33, 16);
+}
 
 void drawWindow(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive) {
     // 背景

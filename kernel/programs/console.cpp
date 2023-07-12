@@ -15,6 +15,34 @@ extern int totalMemory;
 
 uint appDSBase;
 
+char keyCodeToLower[0x54] = {
+    0  , 0  , '1', '2', '3', '4', '5', '6',
+    '7', '8', '9', '0', '-', '=', 0  , 0  ,
+    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
+    'o', 'p', '[', ']', 0  , 0  , 'a', 's',
+    'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
+    '\'', '`', 0  ,'\\', 'z', 'x', 'c', 'v',
+    'b', 'n', 'm', ',', '.', '/', 0  , '*',
+    0  , ' ', 0  , 0  , 0  , 0  , 0  , 0  ,
+    0  , 0  , 0  , 0  , 0  , 0  , 0  , '7',
+    '8', '9', '-', '4', '5', '6', '+', '1',
+    '2', '3', '0', '.'
+};
+
+char keyCodeToUpper[0x54] = {
+    0  , 0  , '!', '@', '#', '$', '%', '^',
+    '&', '*', '(', ')', '_', '+', 0  , 0  ,
+    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
+    'O', 'P', '{', '}', 0  , 0  , 'A', 'S',
+    'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',
+    '"', '~', 0  , '|', 'Z', 'X', 'C', 'V',
+    'B', 'N', 'M', '<', '>', '?', 0  , '*',
+    0  , ' ', 0  , 0  , 0  , 0  , 0  , 0  ,
+    0  , 0  , 0  , 0  , 0  , 0  , 0  , '7',
+    '8', '9', '-', '4', '5', '6', '+', '1',
+    '2', '3', '0', '.'
+};
+
 void _consoleRefreshCursor(ConsoleData *consoleData, bool cursorLit) {
     let layer = consoleData->layer;
     let nextCursorX = consoleData->nextCursorX, nextCursorY = consoleData->nextCursorY;
@@ -317,12 +345,18 @@ void _consoleHandleCommand(ConsoleData *consoleData, char *inputBuffer) {
 
         startApp(elfHeader->entry, 1003 * 8, finfo->size - 1, 1004 * 8, &(thisTask->tss.esp0));
 
+        layerController->releaseLayersAssociatedWithTask(thisTask);
+
+        memset(_dataSegment, 0, (size_t)dataSegmentSize);
+
         memoryManager->releasePageAlign(_codeData,    codeDataSize);
         memoryManager->releasePageAlign(_dataSegment, dataSegmentSize);
 
         _consoleLineFeed(consoleData);
     }
 }
+
+void switchFocusedLayer(Layer *layer);
 
 extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
     let consoleData = *((ConsoleData **) 0x0fec);
@@ -334,10 +368,12 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
     } else if (edx == 2) {
         _consolePutString(consoleData, (char*) (appDSBase + ebx));
     } else if (edx == 5) {
-        let layer = layerController->newLayer((byte*) (appDSBase + ebx), esi, edi + 24, eax);
-        drawWindow(layer->buffer, layer->width, layer->height, (const char *) (appDSBase + ecx), eax, true);
+        let layer = layerController->newLayer((byte*) (appDSBase + ebx), esi, edi + 24, eax, thisTask);
+        drawWindow(layer->buffer, layer->width, layer->height, (const char *) (appDSBase + ecx), eax, false);
         layer->setPosition(100, 50);
         layer->setZIndex(layerController->getCount());
+
+        switchFocusedLayer(layer);
 
         reg[7] = (int) layer;
     } else if (edx == 6) {
@@ -383,6 +419,44 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
             windowRoundCorner(layer->buffer, layer->width, layer->height, layer->transparentColor);
             layerController->refresh(layer->x + eax, layer->y + ecx + 24, esi - eax, edi - ecx);
         }
+    } else if (edx == 14) {
+        let layer = (Layer *) ebx;
+
+        layer->release();
+    } else if (edx == 15) {
+        forever {
+            io_cli();
+
+            while (!consoleData->ioQueue->isEmpty()) {
+                let dataRaw = consoleData->ioQueue->pop();
+                let type = (dataRaw & 0xff000000) >> 24;
+                let data = dataRaw & 0x00ffffff;
+
+                if (type == IOQUEUE_CONTROL_IN) {
+                    if (data == 0) {
+                        consoleData->cursorEnabled = false;
+                    } else if (data == 1) {
+                        consoleData->cursorEnabled = true;
+                    }
+                } else if (type == IOQUEUE_KEYBOARD_IN) {
+                    io_sti();
+                    reg[7] = data;
+                    return nullptr;
+                } else if (type == IOQUEUE_TIMER_IN) {
+                    if (data == 1) {
+                        consoleData->cursorTimer->reset(timerController->current() + 50, 1);
+                    }
+                }
+            }
+
+            if (!eax) {
+                io_sti();
+                reg[7] = -1;
+                return nullptr;
+            }
+
+            io_stihlt();
+        }
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }
@@ -411,8 +485,10 @@ void consoleTask(Layer *layer) {
 
     consoleData.layer = layer;
 
-    let cursorTimer = timerController->newTimer(&ioQueue, 50, 1);
-    var cursorLit = true, cursorEnabled = true;
+    consoleData.ioQueue = &ioQueue;
+    consoleData.cursorTimer = timerController->newTimer(&ioQueue, 50, 1);
+    
+    var cursorLit = true;
 
     var lShift = false, rShift = false;
     var putCount = 0;
@@ -431,41 +507,13 @@ void consoleTask(Layer *layer) {
 
             if (type == IOQUEUE_CONTROL_IN) {
                 if (data == 0) {
-                    cursorEnabled = false;
+                    consoleData.cursorEnabled = false;
                 } else if (data == 1) {
-                    cursorEnabled = true;
+                    consoleData.cursorEnabled = true;
                     cursorLit = true;
-                    _consoleRefreshCursor(&consoleData, cursorLit && cursorEnabled);
+                    _consoleRefreshCursor(&consoleData, cursorLit && consoleData.cursorEnabled);
                 }
             } else if (type == IOQUEUE_KEYBOARD_IN) {
-                static char keyCodeToLower[0x54] = {
-                    0  , 0  , '1', '2', '3', '4', '5', '6',
-                    '7', '8', '9', '0', '-', '=', 0  , 0  ,
-                    'q', 'w', 'e', 'r', 't', 'y', 'u', 'i',
-                    'o', 'p', '[', ']', 0  , 0  , 'a', 's',
-                    'd', 'f', 'g', 'h', 'j', 'k', 'l', ';',
-                   '\'', '`', 0  ,'\\', 'z', 'x', 'c', 'v',
-                    'b', 'n', 'm', ',', '.', '/', 0  , '*',
-                    0  , ' ', 0  , 0  , 0  , 0  , 0  , 0  ,
-                    0  , 0  , 0  , 0  , 0  , 0  , 0  , '7',
-                    '8', '9', '-', '4', '5', '6', '+', '1',
-                    '2', '3', '0', '.'
-                };
-
-                static char keyCodeToUpper[0x54] = {
-                    0  , 0  , '!', '@', '#', '$', '%', '^',
-                    '&', '*', '(', ')', '_', '+', 0  , 0  ,
-                    'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I',
-                    'O', 'P', '{', '}', 0  , 0  , 'A', 'S',
-                    'D', 'F', 'G', 'H', 'J', 'K', 'L', ':',
-                    '"', '~', 0  , '|', 'Z', 'X', 'C', 'V',
-                    'B', 'N', 'M', '<', '>', '?', 0  , '*',
-                    0  , ' ', 0  , 0  , 0  , 0  , 0  , 0  ,
-                    0  , 0  , 0  , 0  , 0  , 0  , 0  , '7',
-                    '8', '9', '-', '4', '5', '6', '+', '1',
-                    '2', '3', '0', '.'
-                };
-
                 if (data == 0x1c) {
                     fillRect(layer->buffer, layer->width, HARIB_COL_000, consoleData.nextCursorX, consoleData.nextCursorY, 2, 16);
                     layerController->refresh(layer->x + consoleData.nextCursorX, layer->y + consoleData.nextCursorY, 2, 16);
@@ -479,7 +527,7 @@ void consoleTask(Layer *layer) {
                     
                     inputBuffer[0] = 0;
 
-                    _consoleRefreshCursor(&consoleData, cursorLit && cursorEnabled);
+                    _consoleRefreshCursor(&consoleData, cursorLit && consoleData.cursorEnabled);
 
                     putCount = 0;
                 } else if (data == 0x2a) {
@@ -498,7 +546,7 @@ void consoleTask(Layer *layer) {
                         consoleData.nextCursorX -= 8;
                         inputBuffer[putCount-- - 1] = 0;
 
-                        _consoleRefreshCursor(&consoleData, cursorLit && cursorEnabled);
+                        _consoleRefreshCursor(&consoleData, cursorLit && consoleData.cursorEnabled);
                     }
                 } else if (data < 0x54 && keyCodeToLower[data] != 0) {
                     let caps = (bootInfo->leds & 4) != 0;
@@ -519,13 +567,13 @@ void consoleTask(Layer *layer) {
 
                 cursorLit = true;
 
-                _consoleRefreshCursor(&consoleData, cursorLit && cursorEnabled);
+                _consoleRefreshCursor(&consoleData, cursorLit && consoleData.cursorEnabled);
             } else if (type == IOQUEUE_TIMER_IN) {
                 if (data == 1) {
                     cursorLit = !cursorLit;
-                    _consoleRefreshCursor(&consoleData, cursorLit && cursorEnabled);
+                    _consoleRefreshCursor(&consoleData, cursorLit && consoleData.cursorEnabled);
 
-                    cursorTimer->reset(cursorTimer->timeoutTime + 50, 1);
+                    consoleData.cursorTimer->reset(timerController->current() + 50, 1);
                 }
             }
         }

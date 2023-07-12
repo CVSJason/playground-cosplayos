@@ -6,6 +6,7 @@ struct Layer {
     byte *buffer;
     int x, y, width, height, zIndex, flags, transparentColor;  
     void *layerController;
+    Task *task;
 
     void setZIndex(int zIndex);
     void setPosition(int x, int y);
@@ -22,9 +23,12 @@ public:
     LayerController(const LayerController&) = delete;
 
     void init(MemoryManager *manager, byte *vram, int width, int height);
-    Layer *newLayer(byte *buffer, int width, int height, int transparentColor);
+    Layer *newLayer(byte *buffer, int width, int height, int transparentColor, Task *task = nullptr);
     void refresh(int clipX, int clipY, int clipWidth, int clipHeight, bool moved = false);
+    void refreshMap(int clipX, int clipY, int clipWidth, int clipHeight, int toLayer = -1);
     int getCount() { return topLayer; }
+    Layer *getLayer(int id) { if (id < 0 || id > topLayer) return nullptr; return layers[id]; }
+    void releaseLayersAssociatedWithTask(Task *task);
 
 private:
     void reorder(Layer *targetLayer, int oldZIndex);
@@ -64,8 +68,10 @@ void paintString(byte *vram, int screenWidth, int x, int y, byte color, const ch
 void paintStringToLayerAndRefresh(Layer *layer, int x, int y, byte fg, byte bg, const char *str);
 
 void drawBackground(byte *vram, int screenWidth, int screenHeight);
+
 void drawWindow(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive);
 void drawWindowCaption(byte *vram, int width, int height, const char *name, byte transparentColor, bool isActive);
+void recolorWindowCaption(Layer *layer, bool isActive);
 void windowRoundCorner(byte *vram, int width, int height, byte transparentColor);
 
 /* cursor.cpp */
