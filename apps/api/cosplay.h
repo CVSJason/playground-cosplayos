@@ -14,6 +14,7 @@ extern "C" unsigned int apiReadQueue(bool toSleep = true);
 extern "C" void *apiCreateTimer(unsigned int timeOut, unsigned int dataToSend);
 extern "C" void apiResetTimer(void *handle, unsigned int timeOut, unsigned int dataToSend);
 extern "C" void apiReleaseTimer(void *handle);
+extern "C" void apiBeep(int frequency);
 
 #define HARIB_COL_000 0
 #define HARIB_COL_F00 1

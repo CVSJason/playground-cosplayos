@@ -490,6 +490,19 @@ extern "C" void *_consoleApi(int edi, int esi, int ebp, int esp, int ebx, int ed
         let timer = ((Timer *)ebx);
 
         timer->release();
+    } else if (edx == 20) {
+        if (eax == 0) {
+            io_out8(0x61, io_in8(0x61) & 0x0d);
+        } else {
+            io_out8(0x43, 0xb6);
+            
+            let freq = 1193180000u / (uint)eax;
+
+            io_out8(0x42, freq & 0xff);
+            io_out8(0x42, freq >> 8);
+
+            io_out8(0x61, (io_in8(0x61) | 0x03) & 0x0f);
+        }
     } else if (edx == 65536) {
         return &(thisTask->tss.esp0);
     }

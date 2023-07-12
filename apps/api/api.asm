@@ -7,6 +7,7 @@ bits 32
     global  apiOpenWindow, apiPaintString, apiFillRect, apiSetPixel, apiRefresh, apiDrawLine, apiCloseWindow
     global  apiReadKey, apiReadQueue
     global  apiCreateTimer, apiResetTimer, apiReleaseTimer
+    global  apiBeep
 
 section .text
 
@@ -205,4 +206,10 @@ apiReleaseTimer:
     mov     ebx, [esp + 8]
     int     0x40
     pop     ebx
+    ret
+
+apiBeep:
+    mov     edx, 20
+    mov     eax, [esp + 4]
+    int     0x40
     ret
